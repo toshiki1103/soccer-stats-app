@@ -1,0 +1,102 @@
+/* GoalModal Styles */
+
+.goal-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 16px;
+}
+
+.goal-modal-content {
+  background-color: white;
+  padding: 24px;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.goal-modal-title {
+  font-size: 20px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 24px;
+}
+
+.goal-modal-form-group {
+  margin-bottom: 16px;
+}
+
+.goal-modal-label {
+  display: block;
+  font-size: 14px;
+  font-weight: bold;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.goal-modal-input {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  font-size: 16px;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.goal-modal-input:focus {
+  outline: none;
+  border-color: #0abfff;
+}
+
+.goal-modal-input::placeholder {
+  color: #999;
+}
+
+.goal-modal-buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.goal-modal-button {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.goal-modal-button:active {
+  transform: scale(0.95);
+}
+
+.goal-modal-button-cancel {
+  background-color: #999;
+  color: white;
+}
+
+.goal-modal-button-cancel:hover {
+  background-color: #777;
+}
+
+.goal-modal-button-save {
+  background-color: #0abfff;
+  color: white;
+}
+
+.goal-modal-button-save:hover {
+  background-color: #0099cc;
+}

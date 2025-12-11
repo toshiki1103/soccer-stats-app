@@ -1,0 +1,84 @@
+/* Setup Page Styles */
+
+.setup-container {
+  padding: 16px;
+  padding-top: 32px;
+}
+
+.setup-back-link {
+  color: #0abfff;
+  font-weight: bold;
+  text-decoration: none;
+  font-size: 16px;
+  margin-bottom: 16px;
+  display: inline-block;
+}
+
+.setup-back-link:hover {
+  opacity: 0.8;
+}
+
+.setup-title {
+  font-size: 28px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 24px;
+}
+
+.setup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.setup-form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.setup-label {
+  font-size: 14px;
+  font-weight: bold;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.setup-input {
+  padding: 12px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  font-size: 16px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.setup-input:focus {
+  outline: none;
+  border-color: #0abfff;
+}
+
+.setup-input::placeholder {
+  color: #999;
+}
+
+.setup-button {
+  width: 100%;
+  padding: 16px;
+  background-color: #0abfff;
+  color: white;
+  font-weight: bold;
+  font-size: 18px;
+  border: none;
+  border-radius: 8px;
+  margin-top: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.setup-button:hover {
+  background-color: #0099cc;
+}
+
+.setup-button:active {
+  transform: scale(0.95);
+}
