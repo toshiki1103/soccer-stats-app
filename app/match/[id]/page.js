@@ -21,6 +21,36 @@ export default function Match() {
   const [isFinished, setIsFinished] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [localTimer, setLocalTimer] = useState(0);
+  const [timerStartTime, setTimerStartTime] = useState(null);
+
+  // ページロード時に localStorage から状態を復元
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const stored = localStorage.getItem(`match_${matchId}_state`);
+    if (stored) {
+      try {
+        const state = JSON.parse(stored);
+        console.log('Restored from localStorage:', state);
+        
+        setIsRunning(state.isRunning);
+        setLocalTimer(state.localTimer);
+        setTimer(state.timer);
+        
+        // 実行中だった場合、スタート時刻を計算
+        if (state.isRunning) {
+          const elapsed = Math.floor((Date.now() - state.lastSavedTime) / 1000);
+          const newTimer = state.timer + elapsed;
+          setTimer(newTimer);
+          setLocalTimer(newTimer);
+          setTimerStartTime(Date.now() - newTimer * 1000);
+          console.log('Timer resumed. Elapsed:', elapsed, 'seconds');
+        }
+      } catch (error) {
+        console.error('Failed to restore state:', error);
+      }
+    }
+  }, [matchId]);
 
   useEffect(() => {
     if (!matchId) {
@@ -67,28 +97,37 @@ export default function Match() {
 
   // タイマー: 再開/一時停止の制御
   useEffect(() => {
-    if (!isRunning || !isAdmin || !match || isFinished) {
+    if (!isRunning || !isAdmin || !match) {
       return;
     }
 
     console.log('Timer started. Current time:', timer);
 
-    // 1秒毎に更新
+    // 開始時刻を記録
+    if (!timerStartTime) {
+      setTimerStartTime(Date.now() - timer * 1000);
+    }
+
+    // 1秒毎に更新（実際には Date.now() を使用して正確性を保つ）
     const interval = setInterval(() => {
+      setTimer((prevTimer) => {
+        const elapsed = Math.floor((Date.now() - (timerStartTime || Date.now())) / 1000);
+        return Math.max(prevTimer, elapsed);
+      });
+
       setLocalTimer((prevLocalTimer) => {
         const newTime = prevLocalTimer + 1;
-        setTimer(newTime);
         console.log('Local timer tick:', newTime);
         return newTime;
       });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isRunning, isAdmin, match, isFinished, timer]);
+  }, [isRunning, isAdmin, match, timer, timerStartTime]);
 
   // Firestore に定期的に保存（15秒毎）
   useEffect(() => {
-    if (!isRunning || !isAdmin || !match || isFinished) {
+    if (!isRunning || !isAdmin || !match) {
       return;
     }
 
@@ -104,10 +143,50 @@ export default function Match() {
     }, 15000); // 15秒毎に同期
 
     return () => clearInterval(syncInterval);
-  }, [isRunning, timer, matchId, isAdmin, match, isFinished]);
+  }, [isRunning, timer, matchId, isAdmin, match]);
+
+  // localStorage に定期的に保存（5秒毎）
+  useEffect(() => {
+    if (!isAdmin || !matchId) {
+      return;
+    }
+
+    const storageInterval = setInterval(() => {
+      if (isRunning) {
+        const state = {
+          isRunning,
+          timer,
+          localTimer,
+          lastSavedTime: Date.now(),
+        };
+        localStorage.setItem(`match_${matchId}_state`, JSON.stringify(state));
+        console.log('Saved to localStorage:', state);
+      }
+    }, 5000); // 5秒毎に保存
+
+    return () => clearInterval(storageInterval);
+  }, [isRunning, timer, localTimer, isAdmin, matchId]);
+
+  // 一時停止時に localStorage を保存
+  useEffect(() => {
+    if (!isAdmin || !matchId) {
+      return;
+    }
+
+    if (!isRunning) {
+      const state = {
+        isRunning: false,
+        timer,
+        localTimer,
+        lastSavedTime: Date.now(),
+      };
+      localStorage.setItem(`match_${matchId}_state`, JSON.stringify(state));
+      console.log('Match paused. Saved to localStorage:', state);
+    }
+  }, [isRunning, timer, localTimer, isAdmin, matchId]);
 
   const updateStat = async (team, statType, delta) => {
-    if (!isAdmin || isFinished || !match) return;
+    if (!isAdmin || !match) return;
     
     try {
       const currentStats = match.stats || {};
@@ -124,7 +203,6 @@ export default function Match() {
       
       await updateDoc(doc(db, 'matches', matchId), {
         stats: updatedStats,
-        // ⚠️ timer は更新しない！これがキー
       });
       console.log('Stat updated successfully');
     } catch (error) {
@@ -134,7 +212,7 @@ export default function Match() {
   };
 
   const updateGoal = async (team, delta) => {
-    if (!isAdmin || isFinished || !match) return;
+    if (!isAdmin || !match) return;
     
     try {
       const scoreField = team === 'A' ? 'scoreA' : 'scoreB';
@@ -145,7 +223,6 @@ export default function Match() {
       
       await updateDoc(doc(db, 'matches', matchId), {
         [scoreField]: newValue,
-        // ⚠️ timer は更新しない！これがキー
       });
       console.log('Goal updated successfully');
     } catch (error) {
@@ -162,7 +239,6 @@ export default function Match() {
       await updateDoc(doc(db, 'matches', matchId), {
         [team === 'A' ? 'scoreA' : 'scoreB']: newScore,
         goals: [...(match.goals || []), { time, team, scorer, assist }],
-        // ⚠️ timer は更新しない！これがキー
       });
       setShowGoalModal(false);
     } catch (error) {
@@ -188,10 +264,52 @@ export default function Match() {
         finishedAt: new Date().toISOString(),
       });
       setIsFinished(true);
+      setIsRunning(false);
+      
+      // localStorage から削除
+      localStorage.removeItem(`match_${matchId}_state`);
+      
       alert('試合を終了しました');
     } catch (error) {
       console.error('Finish match error:', error);
       alert('試合終了に失敗しました');
+    }
+  };
+
+  // 試合を再開（終了後の修正用）
+  const restartMatch = async () => {
+    if (!confirm('試合を再開しますか？修正が終わったら「試合終了」をクリックしてください')) return;
+    
+    try {
+      await updateDoc(doc(db, 'matches', matchId), {
+        finished: false,
+      });
+      setIsFinished(false);
+      console.log('Match restarted for editing');
+    } catch (error) {
+      console.error('Restart match error:', error);
+      alert('試合の再開に失敗しました');
+    }
+  };
+
+  // 得点を削除
+  const removeGoal = async (index) => {
+    if (!confirm('この得点を削除しますか？')) return;
+    
+    try {
+      const updatedGoals = match.goals?.filter((_, i) => i !== index) || [];
+      const newScore = updatedGoals.filter(g => g.team === 'A').length;
+      const newScoreB = updatedGoals.filter(g => g.team === 'B').length;
+      
+      await updateDoc(doc(db, 'matches', matchId), {
+        goals: updatedGoals,
+        scoreA: newScore,
+        scoreB: newScoreB,
+      });
+      console.log('Goal removed');
+    } catch (error) {
+      console.error('Remove goal error:', error);
+      alert('得点の削除に失敗しました');
     }
   };
 
@@ -235,8 +353,8 @@ export default function Match() {
             onClick={() => {
               setIsRunning(!isRunning);
               if (!isRunning) {
-                // 再開する時のみ、現在の時刻をローカル値として使用
                 setLocalTimer(timer);
+                setTimerStartTime(Date.now() - timer * 1000);
               }
             }}
             style={{
@@ -253,7 +371,25 @@ export default function Match() {
           </button>
         )}
         {isFinished && (
-          <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#ef4444' }}>試合終了</div>
+          <div>
+            <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#ef4444', marginBottom: '8px' }}>試合終了</div>
+            {isAdmin && (
+              <button
+                onClick={restartMatch}
+                style={{
+                  padding: '8px 24px',
+                  fontWeight: 'bold',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  backgroundColor: '#0099cc',
+                  color: 'white',
+                }}
+              >
+                修正する
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -269,7 +405,7 @@ export default function Match() {
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#0066cc', marginBottom: '8px' }}>{match.teamA}</div>
-          {isAdmin && !isFinished ? (
+          {isAdmin && (!isFinished || isAdmin) ? (
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center' }}>
               <button
                 onClick={() => updateGoal('A', -1)}
@@ -312,7 +448,7 @@ export default function Match() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', color: '#0099cc' }}>vs</div>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#0066cc', marginBottom: '8px' }}>{match.teamB}</div>
-          {isAdmin && !isFinished ? (
+          {isAdmin && (!isFinished || isAdmin) ? (
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center' }}>
               <button
                 onClick={() => updateGoal('B', -1)}
@@ -508,8 +644,27 @@ export default function Match() {
         <div style={{ backgroundColor: '#f0f8ff', padding: '16px', borderRadius: '8px' }}>
           <h3 style={{ fontWeight: 'bold', color: '#0066cc', marginBottom: '12px' }}>得点履歴</h3>
           {match.goals.map((g, i) => (
-            <div key={i} style={{ fontSize: '14px', color: '#0066cc', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid #ddd' }}>
-              <span style={{ fontWeight: 'bold', color: '#0abfff' }}>{g.time}</span> - {g.team === 'A' ? match.teamA : match.teamB}: {g.scorer} {g.assist && `(assist: ${g.assist})`}
+            <div key={i} style={{ fontSize: '14px', color: '#0066cc', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid #ddd', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>
+                <span style={{ fontWeight: 'bold', color: '#0abfff' }}>{g.time}</span> - {g.team === 'A' ? match.teamA : match.teamB}: {g.scorer} {g.assist && `(assist: ${g.assist})`}
+              </span>
+              {isAdmin && isFinished && (
+                <button
+                  onClick={() => removeGoal(i)}
+                  style={{
+                    padding: '4px 8px',
+                    backgroundColor: '#ef4444',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                  }}
+                >
+                  削除
+                </button>
+              )}
             </div>
           ))}
         </div>
