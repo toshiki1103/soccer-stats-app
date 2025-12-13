@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
@@ -20,7 +20,10 @@ export default function Match() {
   const [error, setError] = useState('');
   const [isFinished, setIsFinished] = useState(false);
   const [sessionId, setSessionId] = useState(null);
-  const [localTimer, setLocalTimer] = useState(0);
+  const startTimeRef = useRef(null);
+  const baseTimerRef = useRef(0);
+  const isRunningRef = useRef(false);
+  const localTimerRef = useRef(0);
 
   // ページロード時に localStorage から状態を復元
   useEffect(() => {
@@ -32,18 +35,22 @@ export default function Match() {
         const state = JSON.parse(stored);
         console.log('Restored from localStorage:', state);
         
-        setIsRunning(state.isRunning);
-        setLocalTimer(state.localTimer);
-        setTimer(state.timer);
+        // 常に経過時間を計算
+        const elapsed = Math.floor((Date.now() - state.lastSavedTime) / 1000);
+        const newTimer = state.timer + elapsed;
         
-        // 実行中だった場合、経過時間を計算して追加
+        setIsRunning(state.isRunning);
+        setTimer(newTimer);
+        baseTimerRef.current = newTimer;
+        localTimerRef.current = newTimer;
+        isRunningRef.current = state.isRunning;
+        
+        // 実行中だった場合、開始時刻を設定
         if (state.isRunning) {
-          const elapsed = Math.floor((Date.now() - state.lastSavedTime) / 1000);
-          const newTimer = state.timer + elapsed;
-          setTimer(newTimer);
-          setLocalTimer(newTimer);
-          console.log('Timer resumed. Elapsed:', elapsed, 'seconds. New timer:', newTimer);
+          startTimeRef.current = Date.now() - newTimer * 1000;
         }
+        
+        console.log('Timer updated. Elapsed:', elapsed, 'seconds. New timer:', newTimer);
       } catch (error) {
         console.error('Failed to restore state:', error);
       }
@@ -61,24 +68,22 @@ export default function Match() {
     const unsubscribe = onSnapshot(
       doc(db, 'matches', matchId),
       (snap) => {
-        console.log('Snapshot received:', snap.exists());
+        console.log('Snapshot received:', snap.exists(), 'isRunning:', isRunningRef.current, 'localTimer:', localTimerRef.current);
         if (snap.exists()) {
           const data = snap.data();
-          console.log('Match data:', data);
-          setMatch(data);
+          console.log('Match data (without timer):', { ...data, timer: '*** removed ***' });
+          
+          // ⚠️ 重要: timer フィールドを完全に削除してから state に保存
+          // これにより match が更新されても timer の影響を受けない
+          const { timer: _, ...matchDataWithoutTimer } = data;
+          
+          setMatch(matchDataWithoutTimer);
           setSessionId(data.sessionId);
-          
-          // 実行中でなければ、Firestore からタイマー値を読み込む
-          if (!isRunning) {
-            const firestoreTimer = data.timer?.elapsedSeconds || 0;
-            setLocalTimer(firestoreTimer);
-            setTimer(firestoreTimer);
-            console.log('Timer loaded from Firestore:', firestoreTimer);
-          }
-          
           setIsFinished(data.finished || false);
           const stored = getStoredMatches();
           setIsAdmin(stored.includes(matchId));
+          
+          console.log('Snapshot update completed - timer field excluded from match state');
         } else {
           console.error('Document does not exist:', matchId);
           setError('試合が見つかりません');
@@ -91,85 +96,97 @@ export default function Match() {
     );
 
     return () => unsubscribe();
-  }, [matchId, isRunning]);
+  }, [matchId]);
 
-  // タイマー: 再開/一時停止の制御
+  // タイマー: 再開/一時停止の制御 - Date.now() を使って正確に計算
+  // ⚠️ match に依存しない（match が更新されるたびに useEffect が再実行されるのを防ぐ）
   useEffect(() => {
-    if (!isRunning || !isAdmin || !match) {
+    if (!isRunning || !isAdmin) {
       return;
     }
 
+    // useRef を更新
+    isRunningRef.current = true;
+
     console.log('Timer started. Current time:', timer);
 
-    // 1秒毎に更新
+    // 開始時刻を記録
+    startTimeRef.current = Date.now() - baseTimerRef.current * 1000;
+
+    // 100ms毎に更新（正確性向上）
     const interval = setInterval(() => {
-      setLocalTimer((prevLocalTimer) => {
-        const newTime = prevLocalTimer + 1;
-        setTimer(newTime);
-        console.log('Local timer tick:', newTime);
-        return newTime;
-      });
-    }, 1000);
+      const now = Date.now();
+      const elapsedSeconds = Math.floor((now - startTimeRef.current) / 1000);
+      localTimerRef.current = elapsedSeconds;
+      setTimer(elapsedSeconds);
+      console.log('Timer tick (accurate):', elapsedSeconds);
+    }, 100);
 
     return () => clearInterval(interval);
-  }, [isRunning, isAdmin, match]);
+  }, [isRunning, isAdmin]);
 
-  // Firestore に定期的に保存（15秒毎）
+  // Firestore に定期的に保存（15秒毎）- 実行中の場合のみ
+  // ⚠️ match に依存しない
   useEffect(() => {
-    if (!isRunning || !isAdmin || !match) {
+    if (!isRunning || !isAdmin) {
       return;
     }
 
     const syncInterval = setInterval(async () => {
       try {
         await updateDoc(doc(db, 'matches', matchId), {
-          'timer.elapsedSeconds': timer,
+          'timer.elapsedSeconds': localTimerRef.current,
         });
-        console.log('Timer synced to Firestore:', timer);
+        console.log('Timer synced to Firestore:', localTimerRef.current);
       } catch (error) {
         console.error('Timer sync error:', error);
       }
     }, 15000); // 15秒毎に同期
 
     return () => clearInterval(syncInterval);
-  }, [isRunning, timer, matchId, isAdmin, match]);
+  }, [isRunning, matchId, isAdmin]);
 
-  // localStorage に定期的に保存（5秒毎）- 実行中の場合のみ
+  // localStorage に定期的に保存（5秒毎）
   useEffect(() => {
-    if (!isRunning || !isAdmin || !matchId) {
+    if (!isAdmin || !matchId) {
       return;
     }
 
     const storageInterval = setInterval(() => {
       const state = {
-        isRunning: true,
-        timer,
-        localTimer,
-        lastSavedTime: Date.now(), // 常に現在時刻を保存
+        isRunning,
+        timer: localTimerRef.current,
+        lastSavedTime: Date.now(),
       };
       localStorage.setItem(`match_${matchId}_state`, JSON.stringify(state));
-      console.log('Saved to localStorage (running):', state);
-    }, 5000); // 5秒毎に保存
+      console.log('Saved to localStorage:', state);
+    }, 5000);
 
     return () => clearInterval(storageInterval);
-  }, [isRunning, timer, localTimer, isAdmin, matchId]);
+  }, [isRunning, isAdmin, matchId]);
 
-  // 一時停止時に localStorage を更新
+  // 一時停止時に Firestore に保存
+  // ⚠️ match に依存しない
   useEffect(() => {
-    if (!isAdmin || !matchId || isRunning) {
+    isRunningRef.current = isRunning;
+
+    if (isRunning || !isAdmin || !matchId) {
       return;
     }
 
-    // 一時停止状態を localStorage に保存
-    const state = {
-      isRunning: false,
-      timer,
-      localTimer,
-      lastSavedTime: Date.now(), // 一時停止時は現在時刻を保存
+    const savePauseState = async () => {
+      try {
+        await updateDoc(doc(db, 'matches', matchId), {
+          'timer.elapsedSeconds': localTimerRef.current,
+        });
+        console.log('Paused state saved to Firestore:', localTimerRef.current);
+      } catch (error) {
+        console.error('Error saving paused state:', error);
+      }
     };
-    localStorage.setItem(`match_${matchId}_state`, JSON.stringify(state));
-    console.log('Paused. Saved to localStorage:', state);
-  }, [isRunning, timer, isAdmin, matchId]);
+
+    savePauseState();
+  }, [isRunning, isAdmin, matchId]);
 
   const updateStat = async (team, statType, delta) => {
     if (!isAdmin || !match) return;
@@ -218,7 +235,7 @@ export default function Match() {
   };
 
   const handleGoal = async (scorer, assist, team) => {
-    const time = formatTime(timer);
+    const time = formatTime(localTimerRef.current);
     try {
       const newScore = team === 'A' ? match.scoreA + 1 : match.scoreB + 1;
       
@@ -243,16 +260,13 @@ export default function Match() {
     if (!confirm('試合を終了しますか？')) return;
     
     try {
-      // 最終時間を Firestore に保存
       await updateDoc(doc(db, 'matches', matchId), {
-        'timer.elapsedSeconds': timer,
+        'timer.elapsedSeconds': localTimerRef.current,
         finished: true,
         finishedAt: new Date().toISOString(),
       });
       setIsFinished(true);
       setIsRunning(false);
-      
-      // localStorage から削除
       localStorage.removeItem(`match_${matchId}_state`);
       
       alert('試合を終了しました');
@@ -262,7 +276,6 @@ export default function Match() {
     }
   };
 
-  // 試合を再開（終了後の修正用）
   const restartMatch = async () => {
     if (!confirm('試合を再開しますか？修正が終わったら「試合終了」をクリックしてください')) return;
     
@@ -278,7 +291,6 @@ export default function Match() {
     }
   };
 
-  // 得点を削除
   const removeGoal = async (index) => {
     if (!confirm('この得点を削除しますか？')) return;
     
@@ -333,14 +345,17 @@ export default function Match() {
 
       {/* Timer */}
       <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-        <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#0abfff', marginBottom: '12px' }}>{formatTime(timer)}</div>
+        {!isFinished && (
+          <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#0abfff', marginBottom: '12px' }}>{formatTime(timer)}</div>
+        )}
         {isAdmin && !isFinished && (
           <button
             onClick={() => {
-              setIsRunning(!isRunning);
               if (!isRunning) {
-                setLocalTimer(timer);
+                baseTimerRef.current = timer;
+                localTimerRef.current = timer;
               }
+              setIsRunning(!isRunning);
             }}
             style={{
               padding: '8px 24px',
@@ -352,7 +367,7 @@ export default function Match() {
               color: 'white',
             }}
           >
-            {isRunning ? '一時停止' : '再開'}
+            {isRunning ? '一時停止' : (timer > 0 ? '再開' : 'スタート')}
           </button>
         )}
         {isFinished && (
