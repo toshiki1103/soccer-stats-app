@@ -345,6 +345,11 @@ export default function Match() {
 
       {/* Timer */}
       <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+        {!isAdmin && (
+          <div style={{ fontSize: '14px', color: '#999', marginBottom: '12px', fontWeight: 'bold' }}>
+            📖 このページは閲覧のみです
+          </div>
+        )}
         {!isFinished && (
           <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#0abfff', marginBottom: '12px' }}>{formatTime(timer)}</div>
         )}
@@ -635,9 +640,7 @@ export default function Match() {
             </button>
           )}
         </>
-      ) : (
-        <div style={{ textAlign: 'center', color: '#0099cc', marginBottom: '24px' }}>📖 閲覧モード</div>
-      )}
+      ) : null}
 
       {/* Goals */}
       {match.goals?.length > 0 && (
