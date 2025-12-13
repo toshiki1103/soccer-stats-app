@@ -21,7 +21,6 @@ export default function Match() {
   const [isFinished, setIsFinished] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [localTimer, setLocalTimer] = useState(0);
-  const [timerStartTime, setTimerStartTime] = useState(null);
 
   // ページロード時に localStorage から状態を復元
   useEffect(() => {
@@ -37,14 +36,13 @@ export default function Match() {
         setLocalTimer(state.localTimer);
         setTimer(state.timer);
         
-        // 実行中だった場合、スタート時刻を計算
+        // 実行中だった場合、経過時間を計算して追加
         if (state.isRunning) {
           const elapsed = Math.floor((Date.now() - state.lastSavedTime) / 1000);
           const newTimer = state.timer + elapsed;
           setTimer(newTimer);
           setLocalTimer(newTimer);
-          setTimerStartTime(Date.now() - newTimer * 1000);
-          console.log('Timer resumed. Elapsed:', elapsed, 'seconds');
+          console.log('Timer resumed. Elapsed:', elapsed, 'seconds. New timer:', newTimer);
         }
       } catch (error) {
         console.error('Failed to restore state:', error);
@@ -103,27 +101,18 @@ export default function Match() {
 
     console.log('Timer started. Current time:', timer);
 
-    // 開始時刻を記録
-    if (!timerStartTime) {
-      setTimerStartTime(Date.now() - timer * 1000);
-    }
-
-    // 1秒毎に更新（実際には Date.now() を使用して正確性を保つ）
+    // 1秒毎に更新
     const interval = setInterval(() => {
-      setTimer((prevTimer) => {
-        const elapsed = Math.floor((Date.now() - (timerStartTime || Date.now())) / 1000);
-        return Math.max(prevTimer, elapsed);
-      });
-
       setLocalTimer((prevLocalTimer) => {
         const newTime = prevLocalTimer + 1;
+        setTimer(newTime);
         console.log('Local timer tick:', newTime);
         return newTime;
       });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isRunning, isAdmin, match, timer, timerStartTime]);
+  }, [isRunning, isAdmin, match]);
 
   // Firestore に定期的に保存（15秒毎）
   useEffect(() => {
@@ -145,45 +134,42 @@ export default function Match() {
     return () => clearInterval(syncInterval);
   }, [isRunning, timer, matchId, isAdmin, match]);
 
-  // localStorage に定期的に保存（5秒毎）
+  // localStorage に定期的に保存（5秒毎）- 実行中の場合のみ
   useEffect(() => {
-    if (!isAdmin || !matchId) {
+    if (!isRunning || !isAdmin || !matchId) {
       return;
     }
 
     const storageInterval = setInterval(() => {
-      if (isRunning) {
-        const state = {
-          isRunning,
-          timer,
-          localTimer,
-          lastSavedTime: Date.now(),
-        };
-        localStorage.setItem(`match_${matchId}_state`, JSON.stringify(state));
-        console.log('Saved to localStorage:', state);
-      }
+      const state = {
+        isRunning: true,
+        timer,
+        localTimer,
+        lastSavedTime: Date.now(), // 常に現在時刻を保存
+      };
+      localStorage.setItem(`match_${matchId}_state`, JSON.stringify(state));
+      console.log('Saved to localStorage (running):', state);
     }, 5000); // 5秒毎に保存
 
     return () => clearInterval(storageInterval);
   }, [isRunning, timer, localTimer, isAdmin, matchId]);
 
-  // 一時停止時に localStorage を保存
+  // 一時停止時に localStorage を更新
   useEffect(() => {
-    if (!isAdmin || !matchId) {
+    if (!isAdmin || !matchId || isRunning) {
       return;
     }
 
-    if (!isRunning) {
-      const state = {
-        isRunning: false,
-        timer,
-        localTimer,
-        lastSavedTime: Date.now(),
-      };
-      localStorage.setItem(`match_${matchId}_state`, JSON.stringify(state));
-      console.log('Match paused. Saved to localStorage:', state);
-    }
-  }, [isRunning, timer, localTimer, isAdmin, matchId]);
+    // 一時停止状態を localStorage に保存
+    const state = {
+      isRunning: false,
+      timer,
+      localTimer,
+      lastSavedTime: Date.now(), // 一時停止時は現在時刻を保存
+    };
+    localStorage.setItem(`match_${matchId}_state`, JSON.stringify(state));
+    console.log('Paused. Saved to localStorage:', state);
+  }, [isRunning, timer, isAdmin, matchId]);
 
   const updateStat = async (team, statType, delta) => {
     if (!isAdmin || !match) return;
@@ -354,7 +340,6 @@ export default function Match() {
               setIsRunning(!isRunning);
               if (!isRunning) {
                 setLocalTimer(timer);
-                setTimerStartTime(Date.now() - timer * 1000);
               }
             }}
             style={{
