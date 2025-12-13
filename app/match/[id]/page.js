@@ -496,114 +496,113 @@ export default function Match() {
       </div>
 
       {/* Stats */}
-      {isAdmin ? (
-        <>
-          {/* Admin Mode */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-            {[['A', match.teamA], ['B', match.teamB]].map(([team, name]) => (
-              <div key={team} style={{ backgroundColor: '#f0f8ff', padding: '16px', borderRadius: '8px' }}>
-                <h3 style={{ fontWeight: 'bold', color: '#0066cc', marginBottom: '12px', fontSize: '16px' }}>{name}</h3>
-                
-                {!isFinished && (
-                  <>
-                    <button
-                      onClick={() => { setGoalTeam(team); setShowGoalModal(true); }}
-                      style={{
-                        display: 'block',
-                        width: '100%',
-                        padding: '12px',
-                        backgroundColor: '#0abfff',
-                        color: 'white',
-                        fontWeight: 'bold',
-                        border: 'none',
-                        borderRadius: '6px',
-                        marginBottom: '8px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      得点
-                    </button>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+        {[['A', match.teamA], ['B', match.teamB]].map(([team, name]) => (
+          <div key={team} style={{ backgroundColor: '#f0f8ff', padding: '16px', borderRadius: '8px' }}>
+            <h3 style={{ fontWeight: 'bold', color: '#0066cc', marginBottom: '12px', fontSize: '16px' }}>{name}</h3>
+            
+            {isAdmin && !isFinished && (
+              <>
+                <button
+                  onClick={() => { setGoalTeam(team); setShowGoalModal(true); }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    padding: '12px',
+                    backgroundColor: '#0abfff',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    border: 'none',
+                    borderRadius: '6px',
+                    marginBottom: '8px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  得点
+                </button>
 
-                    <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                      <button
-                        onClick={() => updateStat(team, 'shoot', 1)}
-                        style={{
-                          flex: 1,
-                          padding: '12px',
-                          backgroundColor: '#00a8e8',
-                          color: 'white',
-                          fontWeight: 'bold',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                        }}
-                      >
-                        シュート: +1
-                      </button>
-                      <button
-                        onClick={() => updateStat(team, 'shoot', -1)}
-                        style={{
-                          width: '48px',
-                          padding: '12px',
-                          backgroundColor: '#0088bb',
-                          color: 'white',
-                          fontWeight: 'bold',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                        }}
-                      >
-                        -1
-                      </button>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                      <button
-                        onClick={() => updateStat(team, 'ck', 1)}
-                        style={{
-                          flex: 1,
-                          padding: '12px',
-                          backgroundColor: '#0099cc',
-                          color: 'white',
-                          fontWeight: 'bold',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                        }}
-                      >
-                        コーナーキック: +1
-                      </button>
-                      <button
-                        onClick={() => updateStat(team, 'ck', -1)}
-                        style={{
-                          width: '48px',
-                          padding: '12px',
-                          backgroundColor: '#007799',
-                          color: 'white',
-                          fontWeight: 'bold',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                        }}
-                      >
-                        -1
-                      </button>
-                    </div>
-                  </>
-                )}
-
-                <div style={{ fontSize: '12px', color: '#0066cc', marginTop: '8px', backgroundColor: '#fff', padding: '8px', borderRadius: '4px' }}>
-                  <div>シュート: {match.stats?.[`team${team}_shoot`] || 0}</div>
-                  <div>コーナーキック: {match.stats?.[`team${team}_ck`] || 0}</div>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                  <button
+                    onClick={() => updateStat(team, 'shoot', 1)}
+                    style={{
+                      flex: 1,
+                      padding: '12px',
+                      backgroundColor: '#00a8e8',
+                      color: 'white',
+                      fontWeight: 'bold',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                    }}
+                  >
+                    シュート: +1
+                  </button>
+                  <button
+                    onClick={() => updateStat(team, 'shoot', -1)}
+                    style={{
+                      width: '48px',
+                      padding: '12px',
+                      backgroundColor: '#0088bb',
+                      color: 'white',
+                      fontWeight: 'bold',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                    }}
+                  >
+                    -1
+                  </button>
                 </div>
-              </div>
-            ))}
-          </div>
 
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                  <button
+                    onClick={() => updateStat(team, 'ck', 1)}
+                    style={{
+                      flex: 1,
+                      padding: '12px',
+                      backgroundColor: '#0099cc',
+                      color: 'white',
+                      fontWeight: 'bold',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                    }}
+                  >
+                    コーナーキック: +1
+                  </button>
+                  <button
+                    onClick={() => updateStat(team, 'ck', -1)}
+                    style={{
+                      width: '48px',
+                      padding: '12px',
+                      backgroundColor: '#007799',
+                      color: 'white',
+                      fontWeight: 'bold',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                    }}
+                  >
+                    -1
+                  </button>
+                </div>
+              </>
+            )}
+
+            <div style={{ fontSize: '12px', color: '#0066cc', marginTop: '8px', backgroundColor: '#fff', padding: '8px', borderRadius: '4px' }}>
+              <div>シュート: {match.stats?.[`team${team}_shoot`] || 0}</div>
+              <div>コーナーキック: {match.stats?.[`team${team}_ck`] || 0}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {isAdmin && !isFinished && (
+        <>
           <button
             onClick={copyToClipboard}
             style={{
@@ -621,26 +620,24 @@ export default function Match() {
             📋 URLをコピー (LINE共有用)
           </button>
 
-          {!isFinished && (
-            <button
-              onClick={finishMatch}
-              style={{
-                width: '100%',
-                padding: '12px',
-                backgroundColor: '#ef4444',
-                color: 'white',
-                fontWeight: 'bold',
-                border: 'none',
-                borderRadius: '6px',
-                marginBottom: '24px',
-                cursor: 'pointer',
-              }}
-            >
-              ✓ 試合終了
-            </button>
-          )}
+          <button
+            onClick={finishMatch}
+            style={{
+              width: '100%',
+              padding: '12px',
+              backgroundColor: '#ef4444',
+              color: 'white',
+              fontWeight: 'bold',
+              border: 'none',
+              borderRadius: '6px',
+              marginBottom: '24px',
+              cursor: 'pointer',
+            }}
+          >
+            ✓ 試合終了
+          </button>
         </>
-      ) : null}
+      )}
 
       {/* Goals */}
       {match.goals?.length > 0 && (
